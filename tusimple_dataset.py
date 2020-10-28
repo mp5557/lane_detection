@@ -70,7 +70,7 @@ def convertPointsToMask(height: int, width: int, points: List[np.ndarray]):
     label_img = np.zeros((height, width), dtype=np.uint8)
     for idx, point in enumerate(points):
         cv2.polylines(label_img, [point.reshape(
-            (-1, 1, 2)).astype(np.int32)], False, idx + 1, 1)
+            (-1, 1, 2)).astype(np.int32)], False, idx + 1, 12)
     return label_img
 
 
@@ -82,13 +82,28 @@ class TensorConverter(object):
             (0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         self.scale = 0.8
 
+        w, h = 1280, 720
+        upper_scale = w / 4
+        upper_line = 220
+        lower_scale = w / 2 * 1.5
+        lower_line = h
+        hws = w / 2
+        ps = np.float32([[hws - upper_scale, upper_line], [hws + upper_scale, upper_line],
+                        [hws - lower_scale, lower_line], [hws + lower_scale, lower_line]])
+        pd = np.float32([[0, 0], [w, 0], [0, h], [w, h]])
+        self.trans_mat = cv2.getPerspectiveTransform(ps, pd)
+
     def __call__(self, img, points):
+        h, w, _ = img.shape
+        img = cv2.warpPerspective(img, self.trans_mat, (w, h))
+        points = [cv2.perspectiveTransform(
+            p.reshape(1, -1, 2).astype(float), self.trans_mat).reshape(-1, 2) for p in points]
+
         if self.transform is not None:
             img, points = self.transform(img, points)
-        h, w, _ = img.shape
-        dst_mask = convertPointsToMask(
-            int(h * self.scale / 8), int(w * self.scale / 8), [p * (self.scale / 8) for p in points])
-        # dst_mask = np.where(dst_mask, 1, 0)
+        dst_mask = convertPointsToMask(h, w, [p for p in points])
+
+        dst_mask = cv2.resize(dst_mask, (int(w * self.scale / 8), int(h * self.scale / 8)), 0, 0, cv2.INTER_NEAREST)
         dst_mask = torch.from_numpy(dst_mask)
         img = cv2.resize(img, (int(w * self.scale), int(h * self.scale)))
         dst_img = self.toTensor(img)

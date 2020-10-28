@@ -30,9 +30,9 @@ class Model(nn.Module):
 
 
 class SegmentationLoss(nn.Module):
-    def __init__(self) -> None:
+    def __init__(self, pos_weight_val = 2.) -> None:
         super().__init__()
-        pos_weight = torch.Tensor([50.])
+        pos_weight = torch.Tensor([pos_weight_val])
         self.criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
     def forward(self, target: torch.Tensor, lane_segment: torch.Tensor, *args, **kwargs):
