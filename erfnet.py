@@ -61,7 +61,7 @@ class non_bottleneck_1d (nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, num_classes):
+    def __init__(self):
         super().__init__()
         self.initial_block = DownsamplerBlock(3,16)
 
@@ -80,19 +80,17 @@ class Encoder(nn.Module):
             self.layers.append(non_bottleneck_1d(128, 0.3, 8))
             self.layers.append(non_bottleneck_1d(128, 0.3, 16))
 
-        #Only in encoder mode:
-        self.output_conv = nn.Conv2d(128, num_classes, 1, stride=1, padding=0, bias=True)
-
-    def forward(self, input, predict=False):
+    def forward(self, input):
         output = self.initial_block(input)
 
         for layer in self.layers:
             output = layer(output)
 
-        if predict:
-            output = self.output_conv(output)
-
         return output
+    
+    @property
+    def dim(self):
+        return 128
 
 
 class UpsamplerBlock (nn.Module):
@@ -132,20 +130,20 @@ class Decoder (nn.Module):
 
         return output
 
-#ERFNet
-class Net(nn.Module):
-    def __init__(self, num_classes, encoder=None):  #use encoder to pass pretrained encoder
-        super().__init__()
+# #ERFNet
+# class Net(nn.Module):
+#     def __init__(self, num_classes, encoder=None):  #use encoder to pass pretrained encoder
+#         super().__init__()
 
-        if (encoder == None):
-            self.encoder = Encoder(num_classes)
-        else:
-            self.encoder = encoder
-        self.decoder = Decoder(num_classes)
+#         if (encoder == None):
+#             self.encoder = Encoder(num_classes)
+#         else:
+#             self.encoder = encoder
+#         self.decoder = Decoder(num_classes)
 
-    def forward(self, input, only_encode=False):
-        if only_encode:
-            return self.encoder.forward(input, predict=True)
-        else:
-            output = self.encoder(input)    #predict=False by default
-            return self.decoder.forward(output)
+#     def forward(self, input, only_encode=False):
+#         if only_encode:
+#             return self.encoder.forward(input, predict=True)
+#         else:
+#             output = self.encoder(input)    #predict=False by default
+#             return self.decoder.forward(output)
