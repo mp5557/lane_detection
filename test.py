@@ -6,11 +6,11 @@ import torch
 
 from torch.optim import SGD, Adam, lr_scheduler, RMSprop
 import torch.nn as nn
+import torch.nn.functional as F
 
 from os import path
 
-import erfnet
-from model import Output
+from model import predictSegment
 
 from tusimple_dataset import *
 import model
@@ -25,7 +25,8 @@ class ErfnetModule(pl.LightningModule):
 
         self.model = model.Model()
 
-        self.criterion = model.SegmentationLoss()
+        self.criterion_list = nn.ModuleDict(
+            dict(seg_loss=model.SegmentationLoss(), cluster_loss=model.ClusteringLoss()))
 
     def forward(self, x):
         return self.model(x)
@@ -43,19 +44,27 @@ class ErfnetModule(pl.LightningModule):
         data, target = batch
 
         output = self(data)
-        loss = self.criterion(target, **output)
-        self.log('loss/train', loss)
+
+        loss = 0.
+        for loss_name, criterion in self.criterion_list.items():
+            loss_curr = criterion(target, **output)
+            loss = loss_curr + loss
+            self.log(f'loss/train_{loss_name}', loss_curr)
         return loss
 
     def validation_step(self, batch, batch_idx):
         data, target = batch
         with torch.no_grad():
             output = self(data)
-            loss = self.criterion(target, **output)
 
-            pred = Output(**output).predictSegment()
+            loss = 0.
+            for loss_name, criterion in self.criterion_list.items():
+                loss_curr = criterion(target, **output)
+                loss = loss_curr + loss
+                self.log(f'loss/val_{loss_name}', loss_curr)
+
+            pred = predictSegment(**output)
             acc = (target == pred).sum() / float(torch.numel(target))
-        self.log('loss/val', loss)
         self.log('metric/acc', acc)
 # %%
 
@@ -91,26 +100,45 @@ anno_path_list = ['label_data_0531.json',
                   'label_data_0601.json', 'label_data_0313.json']
 
 data_module = TusimpleDataModule(root_path, anno_path_list)
-pl_model = ErfnetModule(1, 32)
+pl_model = ErfnetModule(1, 100)
 trainer = pl.Trainer(gpus=1)
-# trainer = pl.Trainer(
-#     gpus=1, resume_from_checkpoint='/home/bughunter/code/lane_test/lightning_logs/version_6/checkpoints/epoch=1.ckpt')
+# trainer = pl.Trainer(fast_dev_run=True, gpus=1)
 
 # %%
 trainer.fit(pl_model, data_module)
 
 # %%
-for img, labels in data_module.val_dataloader():
-    with torch.no_grad():
-        output = model.Output(**pl_model(img))
-        pred = output.predictSegment()
-    break
+loader = iter(data_module.val_dataloader())
 
 # %%
-frame_id = 2
-fig, (ax0, ax1, ax2) = plt.subplots(3)
+img, labels = next(loader)
+with torch.no_grad():
+    output = pl_model(img)
+    pred = model.predictSegment(**output)
+
+# # plt.matshow(labels[0])
+# # plt.colorbar()
+# # plt.imshow(img[0].sum(axis=0))
+
+# %%
+frame_id = 5
+fig, (ax0, ax1, ax2) = plt.subplots(3, figsize=(15,15))
 ax0.imshow(img[frame_id].sum(axis=0))
-ax1.imshow(labels[frame_id])
-ax2.imshow(pred[frame_id])
+ax1.matshow(labels[frame_id])
+# ax2.matshow(torch.sigmoid(output['lane_segment'][frame_id]))
+ax2.matshow(pred[frame_id])
+# plt.savefig(f'seg_{frame_id}.png')
+
+# %%
+embedding = output['embedding_vector'][frame_id]
+img_list = model.visualizeEmbedding(labels[frame_id], embedding)
+
+fig, ax = plt.subplots(len(img_list) + 1, figsize=(15,15))
+for i, v in enumerate(img_list):
+    ax[i].imshow(v)
+ax[-1].imshow(labels[frame_id])
+# plt.savefig(f'embedding_{frame_id}.png')
+
+
 
 # %%
