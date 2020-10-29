@@ -18,10 +18,10 @@ import model
 
 
 class ErfnetModule(pl.LightningModule):
-    def __init__(self, num_classes, num_epochs, *args, **kwargs) -> None:
+    def __init__(self, num_epochs, *args, **kwargs) -> None:
         super().__init__()
         self.num_epochs = num_epochs
-        self.save_hyperparameters('num_epochs', 'num_classes')
+        self.save_hyperparameters('num_epochs')
 
         self.model = model.Model()
 
@@ -100,7 +100,7 @@ anno_path_list = ['label_data_0531.json',
                   'label_data_0601.json', 'label_data_0313.json']
 
 data_module = TusimpleDataModule(root_path, anno_path_list)
-pl_model = ErfnetModule(1, 100)
+pl_model = ErfnetModule(100)
 trainer = pl.Trainer(gpus=1)
 # trainer = pl.Trainer(fast_dev_run=True, gpus=1)
 
