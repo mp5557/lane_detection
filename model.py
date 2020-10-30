@@ -26,7 +26,7 @@ class Head(nn.Module):
     def __init__(self, input_dim, output_dim) -> None:
         super().__init__()
         self.model = nn.Sequential(
-            non_bottleneck_1d(input_dim, 0.3, 2),
+            non_bottleneck_1d(input_dim, 0.5, 2),
             nn.Conv2d(
                 input_dim, output_dim, 1, stride=1, padding=0, bias=True))
 

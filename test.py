@@ -7,6 +7,7 @@ import torch
 from torch.optim import SGD, Adam, lr_scheduler, RMSprop
 import torch.nn as nn
 import torch.nn.functional as F
+from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 
 from os import path
 
@@ -33,7 +34,6 @@ class ErfnetModule(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = Adam(self.model.parameters(), 1e-3, weight_decay=1e-5)
-                         (0.9, 0.999),  eps=1e-08, weight_decay=1e-4)
 
         def lambda1(epoch): return pow((1-((epoch-1)/self.num_epochs)), 0.9)
         scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda1)
@@ -50,6 +50,7 @@ class ErfnetModule(pl.LightningModule):
             loss_curr = criterion(target, **output)
             loss = loss_curr + loss
             self.log(f'loss/train_{loss_name}', loss_curr)
+        self.log(f'loss/train', loss)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -62,6 +63,7 @@ class ErfnetModule(pl.LightningModule):
                 loss_curr = criterion(target, **output)
                 loss = loss_curr + loss
                 self.log(f'loss/val_{loss_name}', loss_curr)
+            self.log(f'loss/val', loss)
 
             pred = predictSegment(**output)
             acc = (target == pred).sum() / float(torch.numel(target))
@@ -70,7 +72,7 @@ class ErfnetModule(pl.LightningModule):
 
 
 class TusimpleDataModule(pl.LightningDataModule):
-    def __init__(self, root_path, anno_path_list, num_workers=8, batch_size=6, *args, **kw_args) -> None:
+    def __init__(self, root_path, anno_path_list, num_workers=8, batch_size=16, *args, **kw_args) -> None:
         super().__init__()
 
         self.num_workers = num_workers
@@ -99,9 +101,18 @@ root_path = '/home/dji/docker_share/dataset/tusimple/train_set'
 anno_path_list = ['label_data_0531.json',
                   'label_data_0601.json', 'label_data_0313.json']
 
+checkpoint_callback = ModelCheckpoint(monitor='loss/val')
+lr_monitor = LearningRateMonitor(logging_interval='step')
+
 data_module = TusimpleDataModule(root_path, anno_path_list)
-pl_model = ErfnetModule(100)
-trainer = pl.Trainer(gpus=1)
+max_epoch = 100
+
+pl_model = ErfnetModule(max_epoch)
+
+# pl_model = ErfnetModule.load_from_checkpoint('/home/dji/code/lane_detection/lightning_logs/version_4/checkpoints/epoch=5.ckpt')
+
+# trainer = pl.Trainer(gpus=1, max_epochs=max_epoch, callbacks=[lr_monitor, checkpoint_callback])
+trainer = pl.Trainer(gpus=1, max_epochs=max_epoch, callbacks=[lr_monitor, checkpoint_callback], resume_from_checkpoint='/home/dji/code/lane_detection/lightning_logs/version_4/checkpoints/epoch=5.ckpt')
 # trainer = pl.Trainer(fast_dev_run=True, gpus=1)
 
 # %%
