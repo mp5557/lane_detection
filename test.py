@@ -32,7 +32,7 @@ class ErfnetModule(pl.LightningModule):
         return self.model(x)
 
     def configure_optimizers(self):
-        optimizer = Adam(self.model.parameters(), 5e-4,
+        optimizer = Adam(self.model.parameters(), 1e-3, weight_decay=1e-5)
                          (0.9, 0.999),  eps=1e-08, weight_decay=1e-4)
 
         def lambda1(epoch): return pow((1-((epoch-1)/self.num_epochs)), 0.9)
